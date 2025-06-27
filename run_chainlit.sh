@@ -1,21 +1,27 @@
 #!/bin/bash
 set -e
-PORT=${PORT:-8081}
+PORT=${PORT:-8082}
 echo "🚀 Starting Chainlit app on port $PORT..."
 
-# Use current working directory
+if [ ! -f "app.py" ]; then
+    echo "📋 Getting app.py..."
+    wget --clobber https://raw.githubusercontent.com/calvinw/chainlit-mcp-client/refs/heads/main/chainlit_mcp_client/app.py
+fi
+
+if [ ! -f "chainlit.md" ]; then
+    echo "📋 Getting chainlit.md..."
+    wget --clobber https://raw.githubusercontent.com/calvinw/chainlit-mcp-client/refs/heads/main/chainlit_mcp_client/chainlit.md
+fi
+
+if [ ! -d ".chainlit" ]; then
+    echo "📁 Creating .chainlit directory..."
+    mkdir -p .chainlit
+fi
+
+if [ ! -f ".chainlit/config.toml" ]; then
+    echo "⚙️ Getting config.toml..."
+    wget --clobber https://raw.githubusercontent.com/calvinw/chainlit-mcp-client/refs/heads/main/chainlit_mcp_client/.chainlit/config.toml -O .chainlit/config.toml
+fi
 
 uv sync
-
-# Copy the packaged config if it doesn't exist locally
-if [ ! -d ".chainlit" ]; then
-    echo "📋 Copying packaged .chainlit config..."
-    cp -r .venv/lib/python3.13/site-packages/chainlit_mcp_client/.chainlit .
-fi
-
-if [ ! -d "app.py" ]; then
-    echo "📋 Copying packaged app.py..."
-    cp -r .venv/lib/python3.13/site-packages/chainlit_mcp_client/app.py .
-fi
-
 uv run chainlit run -w app.py --host 0.0.0.0 --port "$PORT"

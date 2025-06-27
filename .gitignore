@@ -1,4 +1,7 @@
 strudel/
+.chainlit
+app.py
+chainlit.md
 
 # Python
 __pycache__/

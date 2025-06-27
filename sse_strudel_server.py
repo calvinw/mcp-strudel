@@ -1,13 +1,12 @@
 """
-Strudel SSE Server - Now using shared ui_app.py
-Combines MCP server and UI app without duplication
+Strudel SSE Server - Matching button state example structure
 """
 
 import os
 import sys
 from pathlib import Path
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import logging
@@ -27,8 +26,8 @@ logger = logging.getLogger(__name__)
 # Set the UI manager as the MCP server's WebSocket manager
 set_websocket_manager(ui_manager)
 
-# Create the ASGI app for MCP (following BusMgmtDoltDatabase pattern)
-http_app = mcp.http_app(transport="sse", path='/sse')
+# Create the ASGI app for MCP
+http_app = mcp.http_app(transport="sse")
 
 # Minimal OAuth endpoint (just enough for Claude.ai)
 async def oauth_metadata(request: Request):
@@ -53,11 +52,15 @@ app.add_middleware(
 # Add the OAuth metadata route
 app.add_api_route("/.well-known/oauth-authorization-server", oauth_metadata, methods=["GET"])
 
-# Mount the UI app at /strudel path FIRST (specific routes before catch-all)
+# Add redirect for /strudel to /strudel/ (must be before mount)
+@app.get("/strudel")
+async def redirect_to_strudel():
+    return RedirectResponse(url="/strudel/", status_code=307)
+
+# Mount UI app first (specific routes)
 app.mount("/strudel", ui_app)
 
-# Mount the MCP server at root (following BusMgmtDoltDatabase pattern)
-# This makes /sse available directly
+# Mount MCP server at root
 app.mount("/", http_app)
 
 if __name__ == "__main__":
@@ -65,7 +68,7 @@ if __name__ == "__main__":
     print(f"""
 🎵 Strudel MCP Server Starting on port {port}!
 
-🌐 Web Interface: http://localhost:{port}/strudel
+🌐 Web Interface: http://localhost:{port}/strudel/
 🤖 MCP Endpoint: http://localhost:{port}/sse
 ⚡ WebSocket: http://localhost:{port}/strudel/ws
 📊 Status: http://localhost:{port}/api/status

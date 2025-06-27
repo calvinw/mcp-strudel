@@ -28,4 +28,4 @@ EXPOSE 8080
 ENV PORT=8080
 
 # Run the server
-CMD ["python", "sse_server.py"]
+CMD ["python", "sse_strudel_server.py"]
