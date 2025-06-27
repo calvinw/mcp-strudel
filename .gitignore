@@ -1,4 +1,6 @@
+# Ignore strudel directories (we use docs_processed/ instead)
 strudel/
+docs/strudel/
 .chainlit
 app.py
 chainlit.md
