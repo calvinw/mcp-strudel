@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Button Strudel</title>
+</head>
+<body>
+    <button onclick="playKick()" style="padding: 10px 20px; margin: 10px; font-size: 16px;">Play Kick</button>
+    
+    <script src="https://unpkg.com/@strudel/repl@1.0.2"></script>
+    <strudel-editor id="strudelEditor">
+        // Click the button above!
+        silence
+    </strudel-editor>
+
+    <script>
+        let strudelEditor = null;
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            strudelEditor = document.getElementById('strudelEditor');
+        });
+        
+        function playKick() {
+            if (strudelEditor) {
+                const kickPattern = 's("bd bd bd bd").bank("RolandTR808")';
+                
+                console.log('Trying to set kick pattern...');
+                
+                // Method 1: Try to find textarea/input in shadow DOM
+                if (strudelEditor.shadowRoot) {
+                    const textarea = strudelEditor.shadowRoot.querySelector('textarea');
+                    const input = strudelEditor.shadowRoot.querySelector('input[type="text"]');
+                    
+                    if (textarea) {
+                        console.log('Found textarea in shadow DOM');
+                        textarea.value = kickPattern;
+                        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                        textarea.dispatchEvent(new Event('change', { bubbles: true }));
+                        return;
+                    }
+                    
+                    if (input) {
+                        console.log('Found input in shadow DOM');
+                        input.value = kickPattern;
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                        return;
+                    }
+                }
+                
+                // Method 2: Try to simulate paste
+                try {
+                    strudelEditor.focus();
+                    
+                    // Create a paste event
+                    const pasteEvent = new ClipboardEvent('paste', {
+                        bubbles: true,
+                        cancelable: true,
+                        clipboardData: new DataTransfer()
+                    });
+                    
+                    // Add text to clipboard data
+                    pasteEvent.clipboardData.setData('text/plain', kickPattern);
+                    
+                    strudelEditor.dispatchEvent(pasteEvent);
+                    console.log('Sent paste event');
+                } catch (e) {
+                    console.log('Paste event failed:', e);
+                }
+                
+                // Method 3: Try innerHTML as fallback
+                strudelEditor.innerHTML = `<!--\n${kickPattern}\n-->`;
+                console.log('Set innerHTML as fallback');
+            }
+        }
+    </script>
+</body>
+</html>

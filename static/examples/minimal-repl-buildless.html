@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Minimal Buildless Strudel REPL</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #f0f0f0;
+            display: grid;
+            height: 100vh;
+            grid-template-rows: auto 1fr;
+        }
+        
+        .header {
+            background: #333;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            color: #ff6b6b;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 16px;
+        }
+        
+        button:hover {
+            background: #ff5252;
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            height: 100%;
+        }
+        
+        .editor-section {
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+        
+        textarea {
+            flex: 1;
+            background: #2d2d2d;
+            color: #f0f0f0;
+            border: 1px solid #444;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.4;
+            resize: none;
+            outline: none;
+        }
+        
+        textarea:focus {
+            border-color: #ff6b6b;
+        }
+        
+        .info-panel {
+            background: #0d1117;
+            border-left: 1px solid #444;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .status {
+            color: #7c3aed;
+            font-size: 14px;
+            margin-bottom: 15px;
+            padding: 8px;
+            background: #2d2d2d;
+            border-radius: 4px;
+        }
+        
+        .log {
+            color: #58a6ff;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        
+        .error {
+            color: #ff6b6b;
+            background: #331a1a;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 5px 0;
+            font-size: 12px;
+        }
+        
+        .instructions {
+            color: #8b949e;
+            font-size: 11px;
+            line-height: 1.4;
+            margin-top: 20px;
+        }
+        
+        .pattern-examples {
+            margin-top: 20px;
+        }
+        
+        .pattern-examples h3 {
+            color: #4ecdc4;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .example-btn {
+            display: block;
+            width: 100%;
+            margin-bottom: 5px;
+            padding: 5px 8px;
+            background: #2d2d2d;
+            color: #ccc;
+            border: 1px solid #444;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        
+        .example-btn:hover {
+            background: #404040;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎵 Minimal Strudel REPL</h1>
+        <div class="controls">
+            <button id="play">▶ Play</button>
+            <button id="stop">⏹ Stop</button>
+        </div>
+    </div>
+    
+    <div class="main-content">
+        <div class="editor-section">
+            <textarea id="code" placeholder="Enter your Strudel pattern here..." spellcheck="false"></textarea>
+        </div>
+        
+        <div class="info-panel">
+            <div class="status" id="status">Status: Ready</div>
+            <div id="console"></div>
+            
+            <div class="pattern-examples">
+                <h3>Quick Examples:</h3>
+                <button class="example-btn" onclick="loadExample('simple')">Simple Drum Pattern</button>
+                <button class="example-btn" onclick="loadExample('bass')">Bass + Drums</button>
+                <button class="example-btn" onclick="loadExample('melody')">Melody Pattern</button>
+                <button class="example-btn" onclick="loadExample('complex')">Complex Stack</button>
+            </div>
+            
+            <div class="instructions">
+                <strong>Instructions:</strong><br>
+                • Click Play to start audio<br>
+                • Edit patterns in real-time<br>
+                • Use samples('github:tidalcycles/dirt-samples')<br>
+                • Try stack() for layering<br>
+                • Use setcps() to change tempo
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { 
+            repl, 
+            evalScope, 
+            controls 
+        } from 'https://cdn.skypack.dev/@strudel/core@1.0.0';
+        
+        import { 
+            getAudioContext, 
+            webaudioOutput, 
+            initAudioOnFirstClick, 
+            registerSynthSounds 
+        } from 'https://cdn.skypack.dev/@strudel/webaudio@1.0.0';
+        
+        import { transpiler } from 'https://cdn.skypack.dev/@strudel/transpiler@1.0.0';
+
+        // Elements
+        const codeTextarea = document.getElementById('code');
+        const playButton = document.getElementById('play');
+        const stopButton = document.getElementById('stop');
+        const statusDiv = document.getElementById('status');
+        const consoleDiv = document.getElementById('console');
+
+        // Default pattern
+        const defaultPattern = \`samples('github:tidalcycles/dirt-samples')
+setcps(1)
+stack(
+  // amen
+  n("0 1 2 3 4 5 6 7")
+  .sometimes(x=>x.ply(2))
+  .rarely(x=>x.speed("2 | -2"))
+  .sometimesBy(.4, x=>x.delay(".5"))
+  .s("amencutup")
+  .slow(2)
+  .room(.5)
+  ,
+  // bass
+  sine.add(saw.slow(4)).range(0,7).segment(8)
+  .superimpose(x=>x.add(.1))
+  .scale('G0 minor').note()
+  .s("sawtooth").decay(.1).sustain(0)
+  .gain(.4).cutoff(perlin.range(300,3000).slow(8)).resonance(10)
+  .degradeBy("0 0.1 .5 .1")
+  .rarely(add(note("12")))
+  ,
+  // chord
+  note("Bb3,D4".superimpose(x=>x.add(.2)))
+  .s('sawtooth').cutoff(1000).struct("<~@3 [~ x]>")
+  .decay(.05).sustain(.0).delay(.8).delaytime(.125).room(.8)
+  ,
+  // alien
+  s("breath").room(1).shape(.6).chop(16).rev().mask("<x ~@7>")
+  ,
+  n("0 1").s("east").delay(.5).degradeBy(.8).speed(rand.range(.5,1.5))
+).reset("<x@7 x(5,8)>")\`;
+
+        codeTextarea.value = defaultPattern;
+
+        // Example patterns
+        const examples = {
+            simple: \`s("bd hh sd hh").bank('RolandTR808')\`,
+            
+            bass: \`stack(
+  s("bd ~ sd ~").bank('RolandTR808'),
+  note("c2 ~ eb2 ~").s('sawtooth').lpf(800)
+)\`,
+            
+            melody: \`note("c4 d4 eb4 f4 g4 ab4 bb4 c5")
+.s('triangle')
+.slow(2)
+.delay(.3)\`,
+            
+            complex: defaultPattern
+        };
+
+        // Global function for example buttons
+        window.loadExample = function(type) {
+            if (examples[type]) {
+                codeTextarea.value = examples[type];
+                log(\`Loaded \${type} example\`);
+            }
+        };
+
+        // Logging
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = type === 'error' ? 'error' : 'log';
+            div.textContent = \`[\${new Date().toLocaleTimeString()}] \${message}\`;
+            consoleDiv.appendChild(div);
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            
+            // Keep only last 20 messages
+            if (consoleDiv.children.length > 20) {
+                consoleDiv.removeChild(consoleDiv.firstChild);
+            }
+        }
+
+        function setStatus(text, color = '#7c3aed') {
+            statusDiv.textContent = \`Status: \${text}\`;
+            statusDiv.style.color = color;
+        }
+
+        // Initialize Strudel
+        let isInitialized = false;
+        let currentRepl = null;
+
+        async function initStrudel() {
+            if (isInitialized) return;
+            
+            setStatus('Initializing...', '#fbbf24');
+            log('Loading Strudel modules...');
+            playButton.disabled = true;
+            
+            try {
+                await initAudioOnFirstClick();
+                
+                const loadModules = evalScope(
+                    controls,
+                    import('https://cdn.skypack.dev/@strudel/core@1.0.0'),
+                    import('https://cdn.skypack.dev/@strudel/mini@1.0.0'),
+                    import('https://cdn.skypack.dev/@strudel/tonal@1.0.0'),
+                    import('https://cdn.skypack.dev/@strudel/webaudio@1.0.0'),
+                );
+                
+                await Promise.all([loadModules, registerSynthSounds()]);
+                
+                const ctx = getAudioContext();
+                await ctx.resume();
+                
+                currentRepl = repl({
+                    defaultOutput: webaudioOutput,
+                    getTime: () => ctx.currentTime,
+                    transpiler,
+                });
+                
+                isInitialized = true;
+                setStatus('Ready', '#10b981');
+                log('Strudel initialized successfully!');
+                
+            } catch (error) {
+                setStatus('Error', '#ef4444');
+                log(\`Initialization failed: \${error.message}\`, 'error');
+                console.error('Strudel init error:', error);
+            } finally {
+                playButton.disabled = false;
+            }
+        }
+
+        // Event handlers
+        playButton.addEventListener('click', async () => {
+            if (!isInitialized) {
+                await initStrudel();
+            }
+            
+            if (!currentRepl) {
+                log('REPL not available', 'error');
+                return;
+            }
+            
+            const code = codeTextarea.value.trim();
+            if (!code) {
+                log('No code to evaluate', 'error');
+                return;
+            }
+            
+            try {
+                setStatus('Playing...', '#10b981');
+                log(\`Evaluating pattern...\`);
+                
+                await currentRepl.evaluate(code);
+                log('Pattern started!');
+                
+            } catch (error) {
+                setStatus('Error', '#ef4444');
+                log(\`Evaluation failed: \${error.message}\`, 'error');
+                console.error('Eval error:', error);
+            }
+        });
+
+        stopButton.addEventListener('click', () => {
+            if (currentRepl) {
+                currentRepl.stop();
+                setStatus('Stopped', '#6b7280');
+                log('Playback stopped');
+            }
+        });
+
+        // Initialize on first interaction
+        log('Ready! Click Play to initialize and start audio.');
+    </script>
+</body>
+</html>

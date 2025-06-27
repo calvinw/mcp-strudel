@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Buildless CodeMirror Strudel REPL</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #f0f0f0;
+        }
+        
+        main {
+            display: grid;
+            height: 100vh;
+            grid-template-rows: 40px auto;
+        }
+        
+        nav {
+            background: #333;
+            display: flex;
+            gap: 10px;
+            padding: 5px 10px;
+            align-items: center;
+        }
+        
+        button {
+            padding: 8px 16px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        
+        button:hover {
+            background: #ff5252;
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            height: 100%;
+        }
+        
+        #editor {
+            background: #2d2d2d;
+            padding: 20px;
+            overflow: auto;
+        }
+        
+        #code {
+            width: 100%;
+            height: 400px;
+            background: #1e1e1e;
+            color: #f0f0f0;
+            border: 1px solid #444;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.4;
+            resize: vertical;
+        }
+        
+        #output {
+            background: #0d1117;
+            padding: 20px;
+            border-left: 1px solid #444;
+            overflow: auto;
+            color: #58a6ff;
+            font-size: 12px;
+        }
+        
+        #roll {
+            width: 100%;
+            height: 200px;
+            background: #0d1117;
+            border: 1px solid #444;
+            margin-top: 10px;
+        }
+        
+        .status {
+            color: #7c3aed;
+            font-size: 11px;
+            margin-bottom: 10px;
+        }
+        
+        .error {
+            color: #ff6b6b;
+            background: #331a1a;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 5px 0;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <nav>
+            <button id="play">▶ Evaluate</button>
+            <button id="stop">⏹ Stop</button>
+            <span class="status">Status: <span id="status">Ready</span></span>
+        </nav>
+        <div class="container">
+            <div id="editor">
+                <textarea id="code" spellcheck="false"></textarea>
+                <canvas id="roll"></canvas>
+            </div>
+            <div id="output">
+                <div class="status">Output Console</div>
+                <div id="console"></div>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        import { 
+            controls, 
+            repl, 
+            evalScope, 
+            Pattern 
+        } from 'https://cdn.skypack.dev/@strudel/core@1.0.0';
+        
+        import { mini } from 'https://cdn.skypack.dev/@strudel/mini@1.0.0';
+        import { transpiler } from 'https://cdn.skypack.dev/@strudel/transpiler@1.0.0';
+        import {
+            getAudioContext,
+            webaudioOutput,
+            initAudioOnFirstClick,
+            registerSynthSounds,
+        } from 'https://cdn.skypack.dev/@strudel/webaudio@1.0.0';
+
+        // Initialize elements
+        const codeTextarea = document.getElementById('code');
+        const playButton = document.getElementById('play');
+        const stopButton = document.getElementById('stop');
+        const statusSpan = document.getElementById('status');
+        const consoleDiv = document.getElementById('console');
+        const canvas = document.getElementById('roll');
+        
+        // Set up canvas
+        const ctx = canvas.getContext('2d');
+        canvas.width = canvas.offsetWidth * 2;
+        canvas.height = canvas.offsetHeight * 2;
+        ctx.scale(2, 2);
+
+        // Initial code - funk42 pattern
+        const funk42 = \`// froos - how to funk in 42 lines of code
+// adapted from "how to funk in two minutes" by marc rebillet
+samples('github:felixroos/samples')
+samples('https://strudel.cc/tidal-drum-machines.json', 'github:ritchse/tidal-drum-machines/main/machines/')
+
+setcps(.5)
+
+let drums = stack(
+  s("bd*2, ~ sd").bank('RolandTR707').room("0 .1"),
+  s("hh*4").begin(.2).release(.02).end(.25).release(.02)
+  .gain(.3).bank('RolandTR707').late(.02).room(.5),
+).fast(2)
+
+let wurli = note(\\\`<
+[[a2,g3,[b3 c4],e4] ~ [g3,c4,e4](3,8)@4 ~@2]!3 
+[[e2,e3,a3,b3,e4]@3 [e2,e3,ab3,b3,e4]@5]>\\\`)
+  .s("gm_epiano1:5").decay(.2).sustain("<[1 0@7]!3 1>")
+  .gain("<[.8@2 .4@14]!3 .7>").room(.3)
+
+let organ = note("<[~@3 [a3,d4,f#4]@2 [[a3,c4,e4]@2 ~] ~@2]!3 ~>".add(12))
+    .s("gm_percussive_organ:2").gain(.6).lpf(1800).pan(.2).room(.3);
+
+let clav = note(\\\`<
+[~@3 a2 [g3,[b3 c4],e4]@2 ~ a2 [g3,b3,e4] ~@2 [g3,c4,e4] ~@4]!3
+[~@3 e3 [[a3 b3],c3,e3]@2 ~ e2 [e3,a3]@3 [b3,e3] ~@2 [b3,e3]@2]>\\\`)
+  .s("gm_clavinet:1").decay("<.25!3 [.25 .4]>").sustain(0)
+  .gain(.7).pan(.8).room(.2);
+
+let bass = note(\\\`<
+[a1 [~ [g2 a2]] [g1 g#1] [a1 [g2 a2]]] 
+[a1 [~ [g2 a2]] [e3 d3] [c3 [g3 a3]]] 
+[a1 [~ [g2 a2]] [g1 g#1] [a1 [g2 a2]]] 
+[e2@6 e1@5 e1 [[d2 e3] g1]@4]
+>\\\`).s("gm_electric_bass_pick:1").release(.1)
+
+stack(
+  drums
+  ,wurli
+  ,organ
+  ,clav
+  ,bass
+)\`;
+
+        codeTextarea.value = funk42;
+        
+        // Console logging
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.textContent = \`[\${new Date().toLocaleTimeString()}] \${message}\`;
+            if (type === 'error') div.className = 'error';
+            consoleDiv.appendChild(div);
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+
+        // Simple piano roll visualization
+        function drawPianoRoll(haps, time) {
+            ctx.clearRect(0, 0, canvas.width / 2, canvas.height / 2);
+            
+            if (!haps || haps.length === 0) return;
+            
+            ctx.fillStyle = '#4ecdc4';
+            ctx.strokeStyle = '#ff6b6b';
+            
+            const drawTime = [-2, 2]; // time window
+            const timeWidth = drawTime[1] - drawTime[0];
+            const canvasWidth = canvas.width / 2;
+            const canvasHeight = canvas.height / 2;
+            
+            haps.forEach(hap => {
+                const startX = ((hap.whole.begin - drawTime[0] - time) / timeWidth) * canvasWidth;
+                const endX = ((hap.whole.end - drawTime[0] - time) / timeWidth) * canvasWidth;
+                const width = Math.max(1, endX - startX);
+                
+                // Simple pitch mapping
+                const pitch = hap.value?.note || hap.value?.n || 60;
+                const y = canvasHeight - ((pitch - 30) / 60) * canvasHeight;
+                const height = 3;
+                
+                if (startX > -50 && startX < canvasWidth + 50) {
+                    ctx.fillRect(startX, y, width, height);
+                }
+            });
+        }
+
+        // Status updates
+        function setStatus(text, color = '#7c3aed') {
+            statusSpan.textContent = text;
+            statusSpan.style.color = color;
+        }
+
+        // Initialize Strudel
+        let isInitialized = false;
+        let currentRepl = null;
+        
+        async function initializeStrudel() {
+            if (isInitialized) return;
+            
+            setStatus('Initializing...', '#fbbf24');
+            log('Loading Strudel modules...');
+            
+            try {
+                await initAudioOnFirstClick();
+                
+                const loadModules = evalScope(
+                    controls,
+                    import('https://cdn.skypack.dev/@strudel/core@1.0.0'),
+                    import('https://cdn.skypack.dev/@strudel/mini@1.0.0'),
+                    import('https://cdn.skypack.dev/@strudel/tonal@1.0.0'),
+                    import('https://cdn.skypack.dev/@strudel/webaudio@1.0.0'),
+                );
+                
+                await Promise.all([loadModules, registerSynthSounds()]);
+                
+                const audioCtx = getAudioContext();
+                currentRepl = repl({
+                    defaultOutput: webaudioOutput,
+                    getTime: () => audioCtx.currentTime,
+                    transpiler,
+                    onDraw: (haps, time) => drawPianoRoll(haps, time),
+                });
+                
+                isInitialized = true;
+                setStatus('Ready', '#10b981');
+                log('Strudel initialized successfully!');
+                
+            } catch (error) {
+                setStatus('Error', '#ef4444');
+                log(\`Initialization failed: \${error.message}\`, 'error');
+                console.error('Strudel initialization error:', error);
+            }
+        }
+
+        // Event handlers
+        playButton.addEventListener('click', async () => {
+            if (!isInitialized) {
+                await initializeStrudel();
+            }
+            
+            if (!currentRepl) {
+                log('REPL not initialized', 'error');
+                return;
+            }
+            
+            const code = codeTextarea.value.trim();
+            if (!code) {
+                log('No code to evaluate', 'error');
+                return;
+            }
+            
+            try {
+                setStatus('Playing...', '#10b981');
+                log(\`Evaluating: \${code.split('\\n')[0]}...\`);
+                
+                await currentRepl.evaluate(code);
+                log('Pattern started successfully');
+                
+            } catch (error) {
+                setStatus('Error', '#ef4444');
+                log(\`Evaluation failed: \${error.message}\`, 'error');
+                console.error('Evaluation error:', error);
+            }
+        });
+
+        stopButton.addEventListener('click', () => {
+            if (currentRepl) {
+                currentRepl.stop();
+                setStatus('Stopped', '#6b7280');
+                log('Playback stopped');
+                ctx.clearRect(0, 0, canvas.width / 2, canvas.height / 2);
+            }
+        });
+
+        // Auto-resize textarea
+        codeTextarea.addEventListener('input', () => {
+            codeTextarea.style.height = 'auto';
+            codeTextarea.style.height = codeTextarea.scrollHeight + 'px';
+        });
+
+        // Initialize on load
+        log('Ready to initialize Strudel. Click Play to start!');
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            canvas.width = canvas.offsetWidth * 2;
+            canvas.height = canvas.offsetHeight * 2;
+            ctx.scale(2, 2);
+        });
+    </script>
+</body>
+</html>

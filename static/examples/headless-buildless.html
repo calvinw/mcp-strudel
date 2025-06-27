@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Headless Buildless Strudel</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #ff6b6b;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .description {
+            background: #2d2d2d;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border: 1px solid #444;
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        button {
+            padding: 15px 20px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+        
+        button:hover {
+            background: #ff5252;
+            transform: translateY(-2px);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .stop-btn {
+            background: #666;
+        }
+        
+        .stop-btn:hover {
+            background: #555;
+        }
+        
+        .status {
+            background: #0d1117;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            margin-bottom: 20px;
+        }
+        
+        .status-text {
+            color: #7c3aed;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .console {
+            background: #0d1117;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        
+        .log {
+            color: #58a6ff;
+            margin-bottom: 5px;
+        }
+        
+        .error {
+            color: #ff6b6b;
+            background: #331a1a;
+            padding: 5px;
+            border-radius: 3px;
+            margin-bottom: 5px;
+        }
+        
+        .pattern-info {
+            background: #2d2d2d;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 11px;
+            color: #ccc;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Headless Strudel Demo</h1>
+        
+        <div class="description">
+            <p>This demonstrates "headless" Strudel usage - triggering patterns programmatically without a visual editor. Each button plays a different pattern.</p>
+        </div>
+        
+        <div class="status">
+            <div class="status-text" id="status">Status: Ready</div>
+        </div>
+        
+        <div class="controls">
+            <button id="pattern-a">Pattern A: Basic Beat</button>
+            <button id="pattern-b">Pattern B: Groove</button>
+            <button id="pattern-c">Pattern C: Full Stack</button>
+            <button id="pattern-d">Pattern D: Melody</button>
+            <button id="pattern-e">Pattern E: Ambient</button>
+            <button id="stop" class="stop-btn">⏹ Stop All</button>
+        </div>
+        
+        <div class="console" id="console">
+            <div class="log">Ready to initialize Strudel. Click any pattern button to start!</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { 
+            repl, 
+            evalScope, 
+            controls 
+        } from 'https://cdn.skypack.dev/@strudel/core@1.0.0';
+        
+        import { 
+            getAudioContext, 
+            webaudioOutput, 
+            initAudioOnFirstClick, 
+            registerSynthSounds 
+        } from 'https://cdn.skypack.dev/@strudel/webaudio@1.0.0';
+        
+        import { transpiler } from 'https://cdn.skypack.dev/@strudel/transpiler@1.0.0';
+
+        // Elements
+        const statusEl = document.getElementById('status');
+        const consoleEl = document.getElementById('console');
+        const buttons = {
+            a: document.getElementById('pattern-a'),
+            b: document.getElementById('pattern-b'),
+            c: document.getElementById('pattern-c'),
+            d: document.getElementById('pattern-d'),
+            e: document.getElementById('pattern-e'),
+            stop: document.getElementById('stop')
+        };
+
+        // Patterns
+        const patterns = {
+            a: {
+                name: "Basic Beat",
+                code: \`s('bd,jvbass(3,8)').jux(rev)\`,
+                description: "Simple bass drum with jv bass pattern"
+            },
+            
+            b: {
+                name: "Groove",
+                code: \`s('bd*2,hh(3,4),jvbass(5,8,1)').jux(rev)\`,
+                description: "Kick, hi-hat, and bass groove"
+            },
+            
+            c: {
+                name: "Full Stack",
+                code: \`s('bd*2,hh(3,4),jvbass:[0 4](5,8,1)').jux(rev).stack(s('~ sd'))\`,
+                description: "Full drum kit with snare"
+            },
+            
+            d: {
+                name: "Melody",
+                code: \`note("c4 d4 e4 f4 g4 a4 b4 c5")
+.s('triangle')
+.slow(2)
+.delay(.3)
+.room(.5)
+.stack(s("bd ~ sd ~").gain(.7))\`,
+                description: "Melodic pattern with backing drums"
+            },
+            
+            e: {
+                name: "Ambient",
+                code: \`note("c3 eb3 g3 bb3")
+.s(['sawtooth', 'triangle'])
+.slow(4)
+.delay(.8)
+.room(.9)
+.lpf(sine.range(200, 2000).slow(16))
+.gain(.3)\`,
+                description: "Ambient soundscape"
+            }
+        };
+
+        // State
+        let isInitialized = false;
+        let currentRepl = null;
+        let currentPattern = null;
+
+        // Logging
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = type === 'error' ? 'error' : 'log';
+            div.textContent = \`[\${new Date().toLocaleTimeString()}] \${message}\`;
+            consoleEl.appendChild(div);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+            
+            // Keep only last 15 messages
+            if (consoleEl.children.length > 15) {
+                consoleEl.removeChild(consoleEl.firstChild);
+            }
+        }
+
+        function setStatus(text, color = '#7c3aed') {
+            statusEl.textContent = \`Status: \${text}\`;
+            statusEl.style.color = color;
+        }
+
+        function showPatternInfo(pattern) {
+            const existing = document.querySelector('.pattern-info');
+            if (existing) existing.remove();
+            
+            const info = document.createElement('div');
+            info.className = 'pattern-info';
+            info.textContent = \`Playing: \${pattern.name}\\n\${pattern.description}\\n\\nCode: \${pattern.code}\`;
+            document.querySelector('.console').appendChild(info);
+        }
+
+        // Initialize Strudel
+        async function initStrudel() {
+            if (isInitialized) return;
+            
+            setStatus('Initializing...', '#fbbf24');
+            log('Loading Strudel modules...');
+            
+            // Disable all pattern buttons
+            Object.values(buttons).forEach(btn => {
+                if (btn.id !== 'stop') btn.disabled = true;
+            });
+            
+            try {
+                await initAudioOnFirstClick();
+                
+                const loadModules = evalScope(
+                    controls,
+                    import('https://cdn.skypack.dev/@strudel/core@1.0.0'),
+                    import('https://cdn.skypack.dev/@strudel/mini@1.0.0'),
+                    import('https://cdn.skypack.dev/@strudel/tonal@1.0.0'),
+                    import('https://cdn.skypack.dev/@strudel/webaudio@1.0.0'),
+                );
+                
+                await Promise.all([loadModules, registerSynthSounds()]);
+                
+                // Load samples
+                await evalScope(
+                    import('https://cdn.skypack.dev/@strudel/core@1.0.0').then(m => 
+                        m.samples('github:tidalcycles/dirt-samples')
+                    )
+                );
+                
+                const ctx = getAudioContext();
+                await ctx.resume();
+                
+                currentRepl = repl({
+                    defaultOutput: webaudioOutput,
+                    getTime: () => ctx.currentTime,
+                    transpiler,
+                });
+                
+                isInitialized = true;
+                setStatus('Ready', '#10b981');
+                log('Strudel initialized successfully!');
+                log('Click any pattern button to start playing');
+                
+            } catch (error) {
+                setStatus('Error', '#ef4444');
+                log(\`Initialization failed: \${error.message}\`, 'error');
+                console.error('Strudel init error:', error);
+            } finally {
+                // Re-enable pattern buttons
+                Object.values(buttons).forEach(btn => {
+                    if (btn.id !== 'stop') btn.disabled = false;
+                });
+            }
+        }
+
+        // Play pattern
+        async function playPattern(key) {
+            if (!isInitialized) {
+                await initStrudel();
+            }
+            
+            if (!currentRepl) {
+                log('REPL not available', 'error');
+                return;
+            }
+            
+            const pattern = patterns[key];
+            if (!pattern) {
+                log(\`Pattern \${key} not found\`, 'error');
+                return;
+            }
+            
+            try {
+                setStatus(\`Playing: \${pattern.name}\`, '#10b981');
+                log(\`Playing pattern: \${pattern.name}\`);
+                
+                await currentRepl.evaluate(pattern.code);
+                currentPattern = pattern;
+                showPatternInfo(pattern);
+                
+            } catch (error) {
+                setStatus('Error', '#ef4444');
+                log(\`Failed to play \${pattern.name}: \${error.message}\`, 'error');
+                console.error('Pattern play error:', error);
+            }
+        }
+
+        // Stop playback
+        function stopPlayback() {
+            if (currentRepl) {
+                currentRepl.stop();
+                setStatus('Stopped', '#6b7280');
+                log('All patterns stopped');
+                currentPattern = null;
+                
+                const existing = document.querySelector('.pattern-info');
+                if (existing) existing.remove();
+            }
+        }
+
+        // Event listeners
+        buttons.a.addEventListener('click', () => playPattern('a'));
+        buttons.b.addEventListener('click', () => playPattern('b'));
+        buttons.c.addEventListener('click', () => playPattern('c'));
+        buttons.d.addEventListener('click', () => playPattern('d'));
+        buttons.e.addEventListener('click', () => playPattern('e'));
+        buttons.stop.addEventListener('click', stopPlayback);
+
+        // Initial setup
+        log('Headless Strudel demo ready!');
+        log('This shows how to trigger patterns programmatically without a visual editor.');
+    </script>
+</body>
+</html>

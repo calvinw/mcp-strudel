@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Button Controlled Strudel</title>
+</head>
+<body>
+    <div class="control-panel">
+        <div class="tempo-controls">
+            <span>Tempo:</span>
+            <button class="tempo-btn" onclick="changeTempo(-0.1)">-</button>
+            <div class="tempo-display" id="tempoDisplay">1.0</div>
+            <button class="tempo-btn" onclick="changeTempo(0.1)">+</button>
+            <span style="margin-left: 20px;">Mode:</span>
+            <button class="tempo-btn" onclick="toggleControlMode()" id="modeBtn">Direct</button>
+        </div>
+        
+        <div class="control-grid">
+            <button class="pattern-btn" data-pattern="kick" onclick="togglePattern('kick')">
+                🥁 Kick
+            </button>
+            <button class="pattern-btn" data-pattern="snare" onclick="togglePattern('snare')">
+                🔥 Snare
+            </button>
+            <button class="pattern-btn" data-pattern="hihat" onclick="togglePattern('hihat')">
+                ⚡ Hi-Hat
+            </button>
+            <button class="pattern-btn" data-pattern="bass" onclick="togglePattern('bass')">
+                🎸 Bass
+            </button>
+            <button class="pattern-btn" data-pattern="melody" onclick="togglePattern('melody')">
+                🎹 Melody
+            </button>
+            <button class="pattern-btn" data-pattern="chord" onclick="togglePattern('chord')">
+                🎵 Chords
+            </button>
+            <button class="pattern-btn" data-pattern="arp" onclick="togglePattern('arp')">
+                ⚡ Arp
+            </button>
+            <button class="pattern-btn" data-pattern="fx" onclick="togglePattern('fx')">
+                ✨ FX
+            </button>
+            <button class="stop-btn" onclick="stopAll()">
+                ⏹ STOP ALL
+            </button>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-dot" id="audioStatus"></div>
+                <span>Audio</span>
+            </div>
+            <div class="status-item">
+                <span>Active: <span id="activePatterns">None</span></span>
+            </div>
+            <div class="status-item">
+                <span id="controlMode">Direct Control</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="strudel-container">
+        <strudel-editor id="strudelEditor">
+            // Click buttons to start jamming!
+            silence
+        </strudel-editor>
+        
+        <div class="pattern-info" id="patternInfo">
+            <strong>Button Controller Ready</strong><br>
+            Click pattern buttons to layer sounds<br>
+            Toggle between Direct and Keystroke modes
+        </div>
+        
+        <div class="keystroke-indicator" id="keystrokeIndicator">
+            Sending Keystroke...
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/@strudel/repl@1.0.2"></script>
+    <script>
+        // Control modes
+        let controlMode = 'direct'; // 'direct' or 'keystroke'
+        let currentTempo = 1.0;
+        let activePatterns = new Set();
+        let strudelEditor = null;
+        
+        // Pattern definitions
+        const patterns = {
+            kick: {
+                name: 'Kick',
+                code: 's("bd*2").bank("RolandTR808")',
+                key: '1'
+            },
+            snare: {
+                name: 'Snare',
+                code: 's("~ sd ~ sd").bank("RolandTR808")',
+                key: '2'
+            },
+            hihat: {
+                name: 'Hi-Hat',
+                code: 's("hh*4").bank("RolandTR808").gain(0.6)',
+                key: '3'
+            },
+            bass: {
+                name: 'Bass',
+                code: 'note("c2 ~ eb2 ~ f2 ~ g2 ~").s("sawtooth").lpf(800)',
+                key: '4'
+            },
+            melody: {
+                name: 'Melody',
+                code: 'note("c4 d4 eb4 f4").s("triangle").slow(2).delay(0.3)',
+                key: 'q'
+            },
+            chord: {
+                name: 'Chords',
+                code: 'note("c4,eb4,g4").s("sawtooth").struct("~ x ~ ~").lpf(1200)',
+                key: 'w'
+            },
+            arp: {
+                name: 'Arp',
+                code: 'note("c4 d4 eb4 f4 g4 f4 eb4 d4").s("sine").fast(2).gain(0.7)',
+                key: 'e'
+            },
+            fx: {
+                name: 'FX',
+                code: 's("breath").room(1).shape(0.6).slow(4).gain(0.4)',
+                key: 'r'
+            }
+        };
+
+        // UI Elements
+        const tempoDisplay = document.getElementById('tempoDisplay');
+        const audioStatus = document.getElementById('audioStatus');
+        const activePatternsList = document.getElementById('activePatterns');
+        const controlModeSpan = document.getElementById('controlMode');
+        const modeBtn = document.getElementById('modeBtn');
+        const patternInfo = document.getElementById('patternInfo');
+        const keystrokeIndicator = document.getElementById('keystrokeIndicator');
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            strudelEditor = document.getElementById('strudelEditor');
+            updateUI();
+            
+            setTimeout(() => {
+                log('Button controller ready!');
+            }, 1000);
+        });
+
+        // Pattern control functions
+        function togglePattern(patternId) {
+            if (activePatterns.has(patternId)) {
+                // Deactivate pattern
+                activePatterns.delete(patternId);
+                deactivateButton(patternId);
+                
+                if (controlMode === 'keystroke') {
+                    sendKeyUp(patterns[patternId].key);
+                }
+            } else {
+                // Activate pattern
+                activePatterns.add(patternId);
+                activateButton(patternId);
+                
+                if (controlMode === 'keystroke') {
+                    sendKeyDown(patterns[patternId].key);
+                }
+            }
+            
+            if (controlMode === 'direct') {
+                updateStrudelPattern();
+            }
+            
+            updateUI();
+        }
+
+        function stopAll() {
+            // Clear all active patterns
+            activePatterns.clear();
+            
+            // Deactivate all buttons
+            document.querySelectorAll('.pattern-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            if (controlMode === 'direct') {
+                playPattern('silence');
+                updatePatternInfo('All patterns stopped');
+            } else {
+                // Send space key (stop all in keystroke mode)
+                sendKey(' ');
+            }
+            
+            updateUI();
+        }
+
+        // Direct control mode
+        function updateStrudelPattern() {
+            if (activePatterns.size === 0) {
+                playPattern('silence');
+                updatePatternInfo('No active patterns');
+                return;
+            }
+            
+            const activeCodes = Array.from(activePatterns).map(id => patterns[id].code);
+            const combinedPattern = \`setcps(\${currentTempo})
+stack(
+\${activeCodes.map(code => '  ' + code).join(',\n')}
+)\`;
+            
+            playPattern(combinedPattern);
+            
+            const activeNames = Array.from(activePatterns).map(id => patterns[id].name);
+            updatePatternInfo(\`Playing: \${activeNames.join(', ')}\`);
+        }
+
+        function playPattern(code) {
+            if (strudelEditor) {
+                // Update the text content directly (since it's not in iframe)
+                strudelEditor.innerHTML = code;
+                
+                // Also try to update any textarea/input elements inside
+                updateEditorText(code);
+                
+                // Try to trigger evaluation
+                if (strudelEditor.evaluate) {
+                    strudelEditor.evaluate();
+                } else if (strudelEditor.shadowRoot) {
+                    // Try accessing through shadow DOM
+                    const evalBtn = strudelEditor.shadowRoot.querySelector('[title="evaluate"]');
+                    if (evalBtn) evalBtn.click();
+                    
+                    // Also try to update shadow DOM text content
+                    updateShadowDOMText(code);
+                }
+                
+                log(\`Playing pattern and updated text\`);
+            }
+        }
+        
+        function updateEditorText(code) {
+            // Try to find and update text areas, inputs, or CodeMirror instances
+            const textElements = strudelEditor.querySelectorAll('textarea, input[type="text"], .cm-content');
+            textElements.forEach(el => {
+                if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+                    el.value = code;
+                    // Trigger input event to notify any listeners
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                } else if (el.classList.contains('cm-content')) {
+                    // CodeMirror content
+                    el.textContent = code;
+                }
+            });
+            
+            // Try to access any editor API
+            if (strudelEditor.editor) {
+                if (strudelEditor.editor.setValue) {
+                    strudelEditor.editor.setValue(code);
+                } else if (strudelEditor.editor.value !== undefined) {
+                    strudelEditor.editor.value = code;
+                }
+            }
+        }
+        
+        function updateShadowDOMText(code) {
+            if (strudelEditor.shadowRoot) {
+                const shadowTextElements = strudelEditor.shadowRoot.querySelectorAll('textarea, input[type="text"], .cm-content, .cm-line');
+                shadowTextElements.forEach(el => {
+                    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+                        el.value = code;
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                    } else {
+                        el.textContent = code;
+                    }
+                });
+                
+                // Try to find any editor instances in shadow DOM
+                const editorElements = strudelEditor.shadowRoot.querySelectorAll('[class*="editor"], [class*="codemirror"]');
+                editorElements.forEach(el => {
+                    if (el.editor && el.editor.setValue) {
+                        el.editor.setValue(code);
+                    }
+                });
+            }
+        }
+
+        // Keystroke control mode
+        function sendKeyDown(key) {
+            showKeystrokeIndicator(\`Key Down: \${key.toUpperCase()}\`);
+            
+            const event = new KeyboardEvent('keydown', {
+                key: key,
+                code: \`Key\${key.toUpperCase()}\`,
+                bubbles: true,
+                cancelable: true
+            });
+            
+            // Send to document and Strudel editor
+            document.dispatchEvent(event);
+            if (strudelEditor) {
+                strudelEditor.dispatchEvent(event);
+            }
+            
+            log(\`Sent keydown: \${key}\`);
+        }
+
+        function sendKeyUp(key) {
+            showKeystrokeIndicator(\`Key Up: \${key.toUpperCase()}\`);
+            
+            const event = new KeyboardEvent('keyup', {
+                key: key,
+                code: \`Key\${key.toUpperCase()}\`,
+                bubbles: true,
+                cancelable: true
+            });
+            
+            document.dispatchEvent(event);
+            if (strudelEditor) {
+                strudelEditor.dispatchEvent(event);
+            }
+            
+            log(\`Sent keyup: \${key}\`);
+        }
+
+        function sendKey(key) {
+            showKeystrokeIndicator(\`Key: \${key === ' ' ? 'SPACE' : key.toUpperCase()}\`);
+            
+            // Send both keydown and keyup for single press
+            const downEvent = new KeyboardEvent('keydown', {
+                key: key,
+                bubbles: true,
+                cancelable: true
+            });
+            
+            const upEvent = new KeyboardEvent('keyup', {
+                key: key,
+                bubbles: true,
+                cancelable: true
+            });
+            
+            document.dispatchEvent(downEvent);
+            if (strudelEditor) {
+                strudelEditor.dispatchEvent(downEvent);
+            }
+            
+            setTimeout(() => {
+                document.dispatchEvent(upEvent);
+                if (strudelEditor) {
+                    strudelEditor.dispatchEvent(upEvent);
+                }
+            }, 100);
+            
+            log(\`Sent key: \${key}\`);
+        }
+
+        // Control mode management
+        function toggleControlMode() {
+            controlMode = controlMode === 'direct' ? 'keystroke' : 'direct';
+            
+            // Stop everything when switching modes
+            stopAll();
+            
+            updateUI();
+            log(\`Switched to \${controlMode} mode\`);
+        }
+
+        function changeTempo(delta) {
+            currentTempo = Math.max(0.2, Math.min(4.0, currentTempo + delta));
+            tempoDisplay.textContent = currentTempo.toFixed(1);
+            
+            if (controlMode === 'direct' && activePatterns.size > 0) {
+                updateStrudelPattern();
+            } else if (controlMode === 'keystroke') {
+                // In keystroke mode, tempo might be controlled by arrow keys
+                if (delta > 0) {
+                    sendKey('ArrowUp');
+                } else {
+                    sendKey('ArrowDown');
+                }
+            }
+            
+            log(\`Tempo: \${currentTempo.toFixed(1)}\`);
+        }
+
+        // UI management
+        function activateButton(patternId) {
+            const btn = document.querySelector(\`[data-pattern="\${patternId}"]\`);
+            if (btn) btn.classList.add('active');
+        }
+
+        function deactivateButton(patternId) {
+            const btn = document.querySelector(\`[data-pattern="\${patternId}"]\`);
+            if (btn) btn.classList.remove('active');
+        }
+
+        function updateUI() {
+            // Update active patterns display
+            if (activePatterns.size === 0) {
+                activePatternsList.textContent = 'None';
+                audioStatus.classList.remove('active');
+            } else {
+                const names = Array.from(activePatterns).map(id => patterns[id].name);
+                activePatternsList.textContent = names.join(', ');
+                audioStatus.classList.add('active');
+            }
+            
+            // Update control mode display
+            controlModeSpan.textContent = controlMode === 'direct' ? 'Direct Control' : 'Keystroke Mode';
+            modeBtn.textContent = controlMode === 'direct' ? 'Direct' : 'Keys';
+            modeBtn.style.background = controlMode === 'direct' ? '#7c3aed' : '#f59e0b';
+        }
+
+        function updatePatternInfo(text) {
+            patternInfo.innerHTML = \`<strong>Status:</strong><br>\${text}\`;
+        }
+
+        function showKeystrokeIndicator(text) {
+            keystrokeIndicator.textContent = text;
+            keystrokeIndicator.classList.add('show');
+            
+            setTimeout(() => {
+                keystrokeIndicator.classList.remove('show');
+            }, 500);
+        }
+
+        // Logging
+        function log(message) {
+            console.log(\`[Button Controller] \${message}\`);
+        }
+
+        // Function to get current editor text
+        function getCurrentEditorText() {
+            if (!strudelEditor) return '';
+            
+            // Try various ways to get the current text
+            const textElements = strudelEditor.querySelectorAll('textarea, input[type="text"]');
+            for (let el of textElements) {
+                if (el.value) return el.value;
+            }
+            
+            // Try shadow DOM
+            if (strudelEditor.shadowRoot) {
+                const shadowTextElements = strudelEditor.shadowRoot.querySelectorAll('textarea, input[type="text"]');
+                for (let el of shadowTextElements) {
+                    if (el.value) return el.value;
+                }
+            }
+            
+            // Try CodeMirror content
+            const cmContent = strudelEditor.querySelector('.cm-content') || 
+                            (strudelEditor.shadowRoot && strudelEditor.shadowRoot.querySelector('.cm-content'));
+            if (cmContent) return cmContent.textContent;
+            
+            // Fallback to innerHTML
+            return strudelEditor.innerHTML || '';
+        }
+        
+        // Function to set custom pattern code
+        function setCustomPattern(code) {
+            playPattern(code);
+            updatePatternInfo(\`Custom pattern loaded\`);
+            log(\`Custom pattern set: \${code.substring(0, 50)}...\`);
+        }
+
+        // Global access for debugging and external control
+        window.buttonController = {
+            sendKey,
+            sendKeyDown,
+            sendKeyUp,
+            toggleControlMode,
+            setCustomPattern,
+            getCurrentEditorText,
+            playPattern,
+            patterns,
+            activePatterns,
+            stopAll,
+            changeTempo
+        };
+        
+        log('Button-controlled Strudel initialized');
+    </script>
+</body>
+</html>

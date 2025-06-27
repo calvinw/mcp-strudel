@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Working Button Control</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 20px;
+            background: #1a1a1a;
+            color: #f0f0f0;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+        }
+        
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        
+        button:hover {
+            background: #ff5252;
+        }
+        
+        .stop-btn {
+            background: #666;
+        }
+        
+        .stop-btn:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎵 Working Button Control</h1>
+    
+    <div class="controls">
+        <button onclick="playPattern('kick')">🥁 Kick</button>
+        <button onclick="playPattern('snare')">🔥 Snare</button>
+        <button onclick="playPattern('hihat')">⚡ Hi-Hat</button>
+        <button onclick="playPattern('bass')">🎸 Bass</button>
+        <button onclick="playPattern('melody')">🎹 Melody</button>
+        <button onclick="stopAll()" class="stop-btn">⏹ Stop</button>
+    </div>
+    
+    <script src="https://unpkg.com/@strudel/repl@1.0.2"></script>
+    <strudel-editor id="strudelEditor">
+        <!--
+        // Click buttons to control!
+        silence
+        -->
+    </strudel-editor>
+
+    <script>
+        // Pattern definitions
+        const patterns = {
+            kick: 's("bd bd bd bd").bank("RolandTR808")',
+            snare: 's("~ sd ~ sd").bank("RolandTR808")',
+            hihat: 's("hh*4").bank("RolandTR808").gain(0.6)',
+            bass: 'note("c2 ~ eb2 ~ f2 ~ g2 ~").s("sawtooth").lpf(800)',
+            melody: 'note("c4 d4 e4 f4 g4 f4 e4 d4").s("triangle").slow(2)'
+        };
+
+        function playPattern(patternName) {
+            const editor = document.getElementById('strudelEditor');
+            if (!editor || !editor.editor) {
+                console.log('Editor not ready yet');
+                return;
+            }
+
+            const code = patterns[patternName];
+            if (!code) {
+                console.log('Pattern not found:', patternName);
+                return;
+            }
+
+            console.log('Playing:', patternName);
+
+            // Set the code
+            editor.editor.code = code;
+
+            // Update the visual editor (CodeMirror 6)
+            if (editor.editor.editor && editor.editor.editor.dispatch) {
+                try {
+                    const transaction = editor.editor.editor.state.update({
+                        changes: {
+                            from: 0,
+                            to: editor.editor.editor.state.doc.length,
+                            insert: code
+                        }
+                    });
+                    editor.editor.editor.dispatch(transaction);
+                } catch (e) {
+                    console.log('Visual update failed:', e);
+                }
+            }
+
+            // Trigger evaluation
+            try {
+                editor.editor.evaluate();
+                console.log('✅ Pattern playing:', patternName);
+            } catch (e) {
+                console.log('❌ Evaluation failed:', e);
+            }
+        }
+
+        function stopAll() {
+            const editor = document.getElementById('strudelEditor');
+            if (!editor || !editor.editor) {
+                console.log('Editor not ready yet');
+                return;
+            }
+
+            try {
+                editor.editor.stop();
+                console.log('⏹ Stopped all patterns');
+            } catch (e) {
+                console.log('❌ Stop failed:', e);
+            }
+        }
+
+        // Global API for external control
+        window.strudelControl = {
+            playPattern,
+            stopAll,
+            setCustomCode: (code) => {
+                const editor = document.getElementById('strudelEditor');
+                if (editor && editor.editor) {
+                    editor.editor.code = code;
+                    if (editor.editor.editor && editor.editor.editor.dispatch) {
+                        try {
+                            const transaction = editor.editor.editor.state.update({
+                                changes: {
+                                    from: 0,
+                                    to: editor.editor.editor.state.doc.length,
+                                    insert: code
+                                }
+                            });
+                            editor.editor.editor.dispatch(transaction);
+                        } catch (e) {
+                            console.log('Visual update failed:', e);
+                        }
+                    }
+                    editor.editor.evaluate();
+                }
+            }
+        };
+
+        console.log('🎵 Strudel button control ready!');
+        console.log('Use window.strudelControl for external access');
+    </script>
+</body>
+</html>

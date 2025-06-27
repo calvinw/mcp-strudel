@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keystroke Test</title>
+</head>
+<body>
+    <button onclick="sendTab()" style="padding: 10px 20px; margin: 10px; font-size: 16px;">Send Tab</button>
+    <button onclick="sendCtrlEnter()" style="padding: 10px 20px; margin: 10px; font-size: 16px;">Send Ctrl+Enter</button>
+    <button onclick="inspectEditor()" style="padding: 10px 20px; margin: 10px; font-size: 16px;">Inspect Editor</button>
+    <button onclick="accessEditorProperty()" style="padding: 10px 20px; margin: 10px; font-size: 16px;">Access Editor Property</button>
+    <button onclick="directControl()" style="padding: 10px 20px; margin: 10px; font-size: 16px;">Direct Control</button>
+    
+    <script src="https://unpkg.com/@strudel/repl@1.0.2"></script>
+    <strudel-editor id="strudelEditor">
+        <!--
+        // Press 1 for kick pattern
+        silence
+        -->
+    </strudel-editor>
+
+    <script>
+        function sendTab() {
+            console.log('Sending Tab...');
+            
+            const editor = document.getElementById('strudelEditor');
+            if (!editor) {
+                console.log('Editor not found');
+                return;
+            }
+            
+            // First, make sure the editor can receive focus
+            if (!editor.hasAttribute('tabindex')) {
+                editor.setAttribute('tabindex', '0');
+                console.log('Added tabindex to editor');
+            }
+            
+            // Focus the editor
+            editor.focus();
+            console.log('Editor focused, activeElement:', document.activeElement);
+            
+            // Also try to focus elements inside shadow DOM
+            if (editor.shadowRoot) {
+                const focusableElements = editor.shadowRoot.querySelectorAll('input, textarea, [contenteditable="true"], [tabindex]:not([tabindex="-1"])');
+                console.log('Found focusable elements in shadow DOM:', focusableElements.length);
+                
+                if (focusableElements.length > 0) {
+                    focusableElements[0].focus();
+                    console.log('Focused first element in shadow DOM');
+                }
+            }
+            
+            // Wait a bit, then send keyboard events
+            setTimeout(() => {
+                // Create Tab keydown event with composed: true (though keyboard events are composed by default)
+                const tabDown = new KeyboardEvent('keydown', {
+                    key: 'Tab',
+                    code: 'Tab',
+                    keyCode: 9,
+                    which: 9,
+                    bubbles: true,
+                    cancelable: true,
+                    composed: true // Explicitly set composed for shadow DOM
+                });
+                
+                // Create Tab keyup event
+                const tabUp = new KeyboardEvent('keyup', {
+                    key: 'Tab',
+                    code: 'Tab',
+                    keyCode: 9,
+                    which: 9,
+                    bubbles: true,
+                    cancelable: true,
+                    composed: true
+                });
+                
+                // Send to both the editor and its shadow DOM elements
+                editor.dispatchEvent(tabDown);
+                
+                if (editor.shadowRoot) {
+                    editor.shadowRoot.dispatchEvent(tabDown);
+                    
+                    // Also send to any focused element inside
+                    const activeInShadow = editor.shadowRoot.activeElement;
+                    if (activeInShadow) {
+                        console.log('Sending to active element in shadow DOM:', activeInShadow);
+                        activeInShadow.dispatchEvent(tabDown);
+                    }
+                }
+                
+                setTimeout(() => {
+                    editor.dispatchEvent(tabUp);
+                    
+                    if (editor.shadowRoot) {
+                        editor.shadowRoot.dispatchEvent(tabUp);
+                        const activeInShadow = editor.shadowRoot.activeElement;
+                        if (activeInShadow) {
+                            activeInShadow.dispatchEvent(tabUp);
+                        }
+                    }
+                    
+                    console.log('Tab keystrokes sent with composed: true');
+                }, 50);
+                
+            }, 100);
+        }
+        
+        function sendCtrlEnter() {
+            console.log('Sending Ctrl+Enter...');
+            
+            const editor = document.getElementById('strudelEditor');
+            if (!editor) {
+                console.log('Editor not found');
+                return;
+            }
+            
+            editor.focus();
+            
+            setTimeout(() => {
+                const ctrlEnterDown = new KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    ctrlKey: true,
+                    bubbles: true,
+                    cancelable: true,
+                    composed: true
+                });
+                
+                const ctrlEnterUp = new KeyboardEvent('keyup', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    ctrlKey: true,
+                    bubbles: true,
+                    cancelable: true,
+                    composed: true
+                });
+                
+                editor.dispatchEvent(ctrlEnterDown);
+                
+                setTimeout(() => {
+                    editor.dispatchEvent(ctrlEnterUp);
+                    console.log('Ctrl+Enter sent');
+                }, 50);
+                
+            }, 100);
+        }
+        
+        function inspectEditor() {
+            console.log('Inspecting editor...');
+            
+            const editor = document.getElementById('strudelEditor');
+            if (!editor) {
+                console.log('Editor not found');
+                return;
+            }
+            
+            console.log('Editor element:', editor);
+            console.log('Editor innerHTML:', editor.innerHTML);
+            console.log('Editor children:', editor.children);
+            console.log('Editor shadowRoot:', editor.shadowRoot);
+            
+            // Check for any nested elements
+            const allElements = editor.querySelectorAll('*');
+            console.log('All nested elements:', allElements);
+            
+            // Check for any iframes
+            const iframes = editor.querySelectorAll('iframe');
+            console.log('iframes found:', iframes);
+            
+            // Check for any textareas or inputs
+            const inputs = editor.querySelectorAll('textarea, input');
+            console.log('inputs/textareas found:', inputs);
+            
+            // Try to find any editor-related elements
+            const editorElements = editor.querySelectorAll('[class*="editor"], [class*="codemirror"], [class*="cm-"]');
+            console.log('Editor-related elements:', editorElements);
+            
+            // Also check if the component has any methods or properties
+            console.log('Editor properties:', Object.getOwnPropertyNames(editor));
+            console.log('Editor prototype:', Object.getPrototypeOf(editor));
+            
+            // Check if it's a custom element
+            console.log('Editor constructor:', editor.constructor.name);
+        }
+        
+        function waitAndInspect() {
+            console.log('Waiting for component to load...');
+            
+            // Wait for component to fully initialize
+            setTimeout(() => {
+                console.log('Re-inspecting after delay...');
+                inspectEditor();
+                
+                // Also try to trigger any initialization
+                const editor = document.getElementById('strudelEditor');
+                if (editor) {
+                    // Try clicking on the editor to initialize it
+                    editor.click();
+                    console.log('Clicked editor to potentially initialize');
+                    
+                    // Wait a bit more and inspect again
+                    setTimeout(() => {
+                        console.log('Final inspection after click...');
+                        inspectEditor();
+                    }, 2000);
+                }
+            }, 3000);
+        }
+        
+        function accessEditorProperty() {
+            console.log('Accessing editor property...');
+            
+            const editor = document.getElementById('strudelEditor');
+            if (!editor) {
+                console.log('Editor not found');
+                return;
+            }
+            
+            console.log('editor.settings:', editor.settings);
+            console.log('editor.editor:', editor.editor);
+            
+            if (editor.editor) {
+                console.log('Found internal editor object!');
+                console.log('Internal editor type:', typeof editor.editor);
+                console.log('Internal editor constructor:', editor.editor.constructor.name);
+                console.log('Internal editor properties:', Object.getOwnPropertyNames(editor.editor));
+                
+                // Check if it has common editor methods
+                if (editor.editor.setValue) {
+                    console.log('Editor has setValue method');
+                    
+                    // Try to set some code
+                    const kickPattern = 's("bd bd bd bd").bank("RolandTR808")';
+                    editor.editor.setValue(kickPattern);
+                    console.log('Set editor value to kick pattern');
+                } else {
+                    console.log('No setValue method found');
+                }
+                
+                if (editor.editor.getValue) {
+                    console.log('Current editor value:', editor.editor.getValue());
+                }
+                
+                // Check for other common methods
+                const methods = ['evaluate', 'play', 'stop', 'focus', 'blur'];
+                methods.forEach(method => {
+                    if (editor.editor[method]) {
+                        console.log(`Editor has ${method} method`);
+                    }
+                });
+                
+                // Try to access the DOM elements of the internal editor
+                if (editor.editor.dom) {
+                    console.log('Editor has dom property:', editor.editor.dom);
+                }
+                
+                if (editor.editor.view) {
+                    console.log('Editor has view property:', editor.editor.view);
+                }
+            }
+        }
+        
+        function directControl() {
+            console.log('Attempting direct control...');
+            
+            const editor = document.getElementById('strudelEditor');
+            if (!editor || !editor.editor) {
+                console.log('Editor or internal editor not found');
+                return;
+            }
+            
+            const strudelMirror = editor.editor;
+            console.log('StrudelMirror object:', strudelMirror);
+            
+            // Try to set the code property directly
+            const kickPattern = 's("bd bd bd bd").bank("RolandTR808")';
+            
+            console.log('Current code:', strudelMirror.code);
+            
+            // Try setting the code property
+            strudelMirror.code = kickPattern;
+            console.log('Set code property to:', kickPattern);
+            console.log('New code value:', strudelMirror.code);
+            
+            // Try to update the editor display if there's an editor property
+            if (strudelMirror.editor) {
+                console.log('Found nested editor:', strudelMirror.editor);
+                console.log('Nested editor type:', strudelMirror.editor.constructor.name);
+                
+                // Try CodeMirror methods
+                if (strudelMirror.editor.dispatch) {
+                    console.log('Has CodeMirror 6 dispatch method');
+                    
+                    // CodeMirror 6 style update
+                    try {
+                        const transaction = strudelMirror.editor.state.update({
+                            changes: {
+                                from: 0,
+                                to: strudelMirror.editor.state.doc.length,
+                                insert: kickPattern
+                            }
+                        });
+                        strudelMirror.editor.dispatch(transaction);
+                        console.log('Updated via CodeMirror 6 dispatch');
+                    } catch (e) {
+                        console.log('CodeMirror 6 dispatch failed:', e);
+                    }
+                }
+                
+                if (strudelMirror.editor.setValue) {
+                    console.log('Has setValue method');
+                    strudelMirror.editor.setValue(kickPattern);
+                    console.log('Updated via setValue');
+                }
+            }
+            
+            // Try to evaluate the pattern
+            setTimeout(() => {
+                console.log('Attempting to evaluate...');
+                try {
+                    strudelMirror.evaluate();
+                    console.log('✅ Evaluation triggered successfully!');
+                } catch (e) {
+                    console.log('❌ Evaluation failed:', e);
+                }
+            }, 100);
+        }
+        
+        // Automatically wait and inspect when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(waitAndInspect, 1000);
+        });
+    </script>
+</body>
+</html>
